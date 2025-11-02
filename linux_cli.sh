@@ -53,6 +53,7 @@ VOLBY (globální):
 AKCE:
   -a            vypiš balíčky s dostupným upgradem (APT)
   -u            proveď update + upgrade (APT) [vyžaduje sudo]
+  -p            vypíše informace o procesu (PID, rodič, priorita, počet procesů)
   -s FROM:TO    vytvoř soft link (symbolický) z FROM na TO
   -H FROM:TO    vytvoř hard link z FROM na TO
   -I            nainstaluje symlink na tento skript do /usr/local/bin/linux_cli [sudo]
@@ -218,13 +219,39 @@ act_install_cli_link() {
   fi
 }
 
+# --- Procesové akce ---
+act_procinfo() {
+  log "Zjišťuji informace o aktuálním procesu…"
+
+  local pid ppid prio total
+  pid="$$"
+  ppid="$PPID"
+  prio="$(ps -o pri= -p $$ | tr -d '[:space:]')"
+  total="$(ps -e --no-headers | wc -l | tr -d '[:space:]')"
+
+  echo "PID aktuálního procesu: $pid"
+  echo "PID rodiče procesu: $ppid"
+  echo "Priorita procesu: $prio"
+  echo "Celkový počet procesů v systému: $total"
+
+  [ -n "$LOG_FILE" ] && {
+    echo "PID: $pid" >> "$LOG_FILE"
+    echo "PPID: $ppid" >> "$LOG_FILE"
+    echo "Priorita: $prio" >> "$LOG_FILE"
+    echo "Počet procesů: $total" >> "$LOG_FILE"
+  }
+
+  return 0
+}
+
 # --- parsování flagů do fronty akcí (v pořadí) ---
 declare -a ACTIONS ARGS
 # getopts: a,u,s:,H:,I,f:,q,v,n,d,F,h
-while getopts ":aus:H:If:qvndFh" opt; do
+while getopts ":aus:H:Ipf:qvndFh" opt; do
   case "$opt" in
     a) ACTIONS+=("list"); ARGS+=("");;
     u) ACTIONS+=("upgrade"); ARGS+=("");;
+    p) ACTIONS+=("procinfo"); ARGS+=("");;
     s) ACTIONS+=("soft"); ARGS+=("$OPTARG");;
     H) ACTIONS+=("hard"); ARGS+=("$OPTARG");;
     I) ACTIONS+=("install"); ARGS+=("");;
@@ -257,6 +284,9 @@ overall_rc=0
 for i in "${!ACTIONS[@]}"; do
   action="${ACTIONS[$i]}"; arg="${ARGS[$i]}"
   case "$action" in
+    procinfo)
+      if ! act_procinfo; then overall_rc=1; fi
+      ;;
     list)
       if ! act_list_updates; then overall_rc=1; fi
       ;;
